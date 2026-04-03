@@ -80,8 +80,9 @@
                 </div>
 
                 <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                    <label class="block text-sm font-bold mb-2 text-blue-800">📸 แนบรูปภาพ (Optional)</label>
+                    <label class="block text-sm font-bold mb-2 text-blue-800">📸 แนบรูปภาพ (อัปโหลดใหม่เพื่อเปลี่ยนรูป)</label>
                     <input type="file" id="fileInput" accept="image/*" class="w-full p-1.5 border rounded bg-white text-sm">
+                    <p id="currentImageLabel" class="text-[10px] text-blue-500 mt-1 hidden italic">* มีรูปเดิมอยู่ในระบบแล้ว (หากไม่เลือกใหม่จะใช้รูปเดิม)</p>
                 </div>
 
                 <div class="flex gap-3 pt-2">
@@ -112,7 +113,6 @@
     </main>
 
     <script>
-        // --- 1. ตั้งค่าเชื่อมต่อ Supabase ---
         const SUPABASE_URL = 'https://lcawzgxracnkpikowgqo.supabase.co'; 
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjYXd6Z3hyYWNua3Bpa293Z3FvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODIwMjYsImV4cCI6MjA5MDc1ODAyNn0.mPFo_3BP9W2CLdLmPrEzYcY6rC60wJDj5qLeg5bUeZ4';
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -128,7 +128,6 @@
 
         let records = [];
 
-        // --- 2. ฟังก์ชันเริ่มต้นระบบ ---
         function init() {
             const mSel = document.getElementById('modelSelect');
             mSel.innerHTML = '<option value="">-- เลือก Model --</option>';
@@ -152,7 +151,6 @@
             document.getElementById('planGroup').classList.toggle('hidden', isFinish);
         }
 
-        // --- 3. จัดการข้อมูล (Fetch & Render) ---
         async function fetchData() {
             try {
                 const { data, error } = await supabaseClient.from('cm_logs').select('*').order('created_at', { ascending: false });
@@ -164,7 +162,7 @@
 
         function renderTable() {
             const html = records.map(r => {
-                const imgHtml = r.image_url ? `<a href="${r.image_url}" target="_blank"><img src="${r.image_url}" class="w-12 h-12 object-cover rounded mx-auto border"></a>` : `<span class="text-gray-300 text-[10px]">No Photo</span>`;
+                const imgHtml = r.image_url ? `<a href="${r.image_url}" target="_blank"><img src="${r.image_url}" class="w-12 h-12 object-cover rounded mx-auto border hover:scale-110 transition"></a>` : `<span class="text-gray-300 text-[10px]">No Photo</span>`;
                 
                 let sLabel = "On plan", sClass = "bg-blue-100 text-blue-700";
                 if (r.status === 'Finish') { sLabel = "Done"; sClass = "bg-green-100 text-green-700"; }
@@ -185,7 +183,6 @@
             document.getElementById('tableBody').innerHTML = html || '<tr><td colspan="7" class="p-10 text-center text-gray-400">ยังไม่มีข้อมูล</td></tr>';
         }
 
-        // --- 4. ฟังก์ชันแก้ไข (Start Edit) ---
         function startEdit(id) {
             const item = records.find(r => r.id == id);
             if (!item) return;
@@ -203,13 +200,15 @@
             document.getElementById('dateDone').value = item.date_done || '';
             document.getElementById('datePlan').value = item.date_plan || '';
             document.getElementById('revDisplay').innerText = `Revision: ${item.revision || 0}`;
+            
+            if(item.image_url) document.getElementById('currentImageLabel').classList.remove('hidden');
+            
             toggleDateFields();
             document.getElementById('btnSubmit').innerText = "💾 อัปเดตข้อมูล";
             document.getElementById('btnCancel').classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
-        // --- 5. การส่งข้อมูล (Submit) ---
         document.getElementById('cmForm').onsubmit = async function(e) {
             e.preventDefault();
             const editId = document.getElementById('editId').value;
@@ -221,6 +220,7 @@
 
             try {
                 let imageUrl = null;
+                // อัปโหลดรูปใหม่ถ้ามีการเลือกไฟล์
                 if (fileInput.files.length > 0) {
                     const file = fileInput.files[0];
                     const fileName = `${Date.now()}_${file.name}`;
@@ -242,6 +242,7 @@
                     updated_at: new Date().toISOString()
                 };
 
+                // ถ้ามีรูปใหม่ให้ใส่ใน payload ถ้าไม่มีห้ามใส่ (เพื่อไม่ให้ไปทับรูปเดิม)
                 if (imageUrl) payload.image_url = imageUrl;
 
                 if (editId) {
@@ -255,7 +256,7 @@
                     if (error) throw error;
                 }
 
-                alert("✅ สำเร็จ!");
+                alert("✅ บันทึกข้อมูลเรียบร้อย!");
                 resetForm();
                 await fetchData();
                 switchTab('list');
@@ -274,6 +275,7 @@
             document.getElementById('btnSubmit').innerText = "🚀 บันทึกข้อมูล";
             document.getElementById('btnCancel').classList.add('hidden');
             document.getElementById('revDisplay').innerText = "";
+            document.getElementById('currentImageLabel').classList.add('hidden');
             document.getElementById('lineSelect').disabled = true;
             toggleDateFields();
         }
