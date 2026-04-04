@@ -1,1 +1,135 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production CM System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .active-tab { border-bottom: 4px solid #2563eb; color: #2563eb; font-weight: bold; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-10">
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto flex text-center font-bold">
+            <button onclick="switchTab('form')" id="tab-form" class="flex-1 py-4 active-tab">📝 บันทึก/แก้ไข</button>
+            <button onclick="switchTab('list')" id="tab-list" class="flex-1 py-4 text-gray-400">📊 รายการทั้งหมด</button>
+        </div>
+    </nav>
+    <main class="max-w-7xl mx-auto p-4 md:p-6">
+        <div id="page-form">
+            <form id="cmForm" class="bg-white p-6 rounded-xl shadow border space-y-4">
+                <input type="hidden" id="editId" value="">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="date" id="dateOccur" required class="p-2 border rounded">
+                    <select id="modelSelect" required class="p-2 border rounded bg-blue-50"></select>
+                    <select id="lineSelect" required disabled class="p-2 border rounded"></select>
+                    <input type="text" id="pic" required class="p-2 border rounded" placeholder="PIC">
+                </div>
+                <textarea id="issue" required class="w-full p-2 border rounded h-24" placeholder="Issue"></textarea>
+                <textarea id="countermeasure" required class="w-full p-2 border rounded h-24 bg-green-50" placeholder="Countermeasure"></textarea>
+                <div class="flex gap-4">
+                    <select id="status" class="p-2 border rounded" onchange="toggleDateFields()">
+                        <option value="Not Finish">Not Finish</option>
+                        <option value="Finish">Finish</option>
+                    </select>
+                    <input type="date" id="datePlan" class="p-2 border rounded">
+                    <input type="date" id="dateDone" class="p-2 border rounded hidden">
+                </div>
+                <button type="submit" id="btnSubmit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg">🚀 บันทึกข้อมูล</button>
+            </form>
+        </div>
+        <div id="page-list" class="hidden">
+            <table class="w-full bg-white border">
+                <thead class="bg-gray-800 text-white">
+                    <tr><th class="p-2">Date</th><th class="p-2">Model</th><th class="p-2">Issue</th><th class="p-2">Action</th></tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+        </div>
+    </main>
+    <script>
+        const SUPABASE_URL = 'https://lcawzgxracnkpikowgqo.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxjYXd6Z3hyYWNua3Bpa293Z3FvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUxODIwMjYsImV4cCI6MjA5MDc1ODAyNn0.mPFo_3BP9W2CLdLmPrEzYcY6rC60wJDj5qLeg5bUeZ4';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const prodData = {"A3 & V3P":["AS184"],"230W":["AS231"],"300W":["AS182"],"AHB-RX":["AS226"],"AHB-G":["AS275"],"V3.5R":["AS214"]};
+        let records = [];
 
+        async function init() {
+            const mSel = document.getElementById('modelSelect');
+            mSel.innerHTML = '<option value="">-- Model --</option>';
+            Object.keys(prodData).forEach(m => mSel.innerHTML += `<option value="${m}">${m}</option>`);
+            fetchData();
+        }
+
+        document.getElementById('modelSelect').onchange = function() {
+            const lSel = document.getElementById('lineSelect');
+            lSel.innerHTML = '<option value="">-- Line --</option>';
+            if(this.value) { lSel.disabled = false; prodData[this.value].forEach(l => lSel.innerHTML += `<option value="${l}">${l}</option>`); }
+            else lSel.disabled = true;
+        };
+
+        async function fetchData() {
+            const { data, error } = await supabaseClient.from('cm_logs').select('*').order('created_at', { ascending: false });
+            if (!error) { records = data; renderTable(); }
+        }
+
+        function renderTable() {
+            document.getElementById('tableBody').innerHTML = records.map(r => `
+                <tr class="border-b">
+                    <td class="p-2">${r.date_occur}</td>
+                    <td class="p-2">${r.model} (${r.line})</td>
+                    <td class="p-2">${r.issue}</td>
+                    <td class="p-2"><button onclick="startEdit(${r.id})" class="text-blue-600">Edit</button></td>
+                </tr>`).join('');
+        }
+
+        function startEdit(id) {
+            const r = records.find(x => x.id == id);
+            if(!r) return;
+            switchTab('form');
+            document.getElementById('editId').value = r.id;
+            document.getElementById('dateOccur').value = r.date_occur;
+            document.getElementById('modelSelect').value = r.model;
+            document.getElementById('modelSelect').dispatchEvent(new Event('change'));
+            document.getElementById('lineSelect').value = r.line;
+            document.getElementById('pic').value = r.pic;
+            document.getElementById('issue').value = r.issue;
+            document.getElementById('countermeasure').value = r.countermeasure;
+            document.getElementById('status').value = r.status;
+            document.getElementById('btnSubmit').innerText = "💾 อัปเดตข้อมูล";
+        }
+
+        document.getElementById('cmForm').onsubmit = async function(e) {
+            e.preventDefault();
+            const id = document.getElementById('editId').value;
+            const payload = {
+                date_occur: document.getElementById('dateOccur').value,
+                model: document.getElementById('modelSelect').value,
+                line: document.getElementById('lineSelect').value,
+                issue: document.getElementById('issue').value,
+                countermeasure: document.getElementById('countermeasure').value,
+                status: document.getElementById('status').value,
+                pic: document.getElementById('pic').value
+            };
+            const { error } = id ? await supabaseClient.from('cm_logs').update(payload).eq('id', id) : await supabaseClient.from('cm_logs').insert([payload]);
+            if(!error) { alert("สำเร็จ!"); location.reload(); } else { alert(error.message); }
+        };
+
+        function switchTab(t) {
+            document.getElementById('page-form').classList.toggle('hidden', t!=='form');
+            document.getElementById('page-list').classList.toggle('hidden', t!=='list');
+            document.getElementById('tab-form').className = t==='form' ? 'flex-1 py-4 active-tab' : 'flex-1 py-4 text-gray-400';
+            document.getElementById('tab-list').className = t==='list' ? 'flex-1 py-4 active-tab' : 'flex-1 py-4 text-gray-400';
+        }
+        function toggleDateFields() {
+            const isFinish = document.getElementById('status').value === 'Finish';
+            document.getElementById('doneGroup')?.classList.toggle('hidden', !isFinish);
+            document.getElementById('planGroup')?.classList.toggle('hidden', isFinish);
+        }
+        init();
+    </script>
+</body>
+</html>
